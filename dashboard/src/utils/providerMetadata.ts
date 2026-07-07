@@ -6,8 +6,8 @@ export interface ProviderModelMetadata {
 }
 
 export interface ProviderMetadataSource {
+  model?: string
   modalities?: string[]
-  model_metadata?: ProviderModelMetadata | null
   max_context_tokens?: number
   reasoning?: boolean
 }
@@ -19,19 +19,36 @@ export interface ProviderCapabilityBadge {
   tooltip: string
 }
 
-export function formatContextLimit(provider: ProviderMetadataSource | null | undefined): string {
-  const context = provider?.model_metadata?.limit?.context || provider?.max_context_tokens
-  if (!context || typeof context !== 'number') return ''
-  if (context >= 1_000_000) return `${Math.round(context / 1_000_000)}M`
-  if (context >= 1_000) return `${Math.round(context / 1_000)}K`
-  return `${context}`
+export function contextLimit(
+  provider: ProviderMetadataSource | null | undefined,
+  metadata?: ProviderModelMetadata | null
+): number {
+  const context = Number(metadata?.limit?.context || provider?.max_context_tokens || 0)
+  return Number.isFinite(context) && context > 0 ? context : 0
+}
+
+export function formatTokenCount(value: number): string {
+  if (!Number.isFinite(value)) return ''
+  const absValue = Math.abs(value)
+  if (absValue >= 1_000_000) return `${formatCompactNumber(value / 1_000_000)}M`
+  if (absValue >= 1_000) return `${formatCompactNumber(value / 1_000)}K`
+  return `${Math.round(value)}`
+}
+
+export function formatContextLimit(
+  provider: ProviderMetadataSource | null | undefined,
+  metadata?: ProviderModelMetadata | null
+): string {
+  const context = contextLimit(provider, metadata)
+  return context ? formatTokenCount(context) : ''
 }
 
 export function providerCapabilityBadges(
   provider: ProviderMetadataSource | null | undefined,
+  metadata: ProviderModelMetadata | null | undefined,
   tm: (key: string, params?: Record<string, string>) => string
 ): ProviderCapabilityBadge[] {
-  const inputs = provider?.model_metadata?.modalities?.input || []
+  const inputs = metadata?.modalities?.input || []
   const providerModalities = provider?.modalities
   const modalities = Array.isArray(providerModalities) ? providerModalities : []
   const definitions = [
@@ -52,14 +69,14 @@ export function providerCapabilityBadges(
     {
       key: 'tool_use',
       icon: 'mdi-wrench-outline',
-      supported: Boolean(provider?.model_metadata?.tool_call),
+      supported: Boolean(metadata?.tool_call),
       enabled: modalities.includes('tool_use'),
       label: tm('models.metadata.toolUse')
     },
     {
       key: 'reasoning',
       icon: 'mdi-brain',
-      supported: Boolean(provider?.model_metadata?.reasoning),
+      supported: Boolean(metadata?.reasoning),
       enabled: Boolean(provider?.reasoning),
       label: tm('models.metadata.reasoning')
     }
@@ -70,10 +87,16 @@ export function providerCapabilityBadges(
     .map((item) => ({
       key: item.key,
       icon: item.icon,
-      enabled: !provider?.model_metadata || item.enabled,
+      enabled: !metadata || item.enabled,
       tooltip:
-        provider?.model_metadata && !item.enabled
+        metadata && !item.enabled
           ? tm('models.metadata.supportedDisabled', { capability: item.label })
           : tm('models.metadata.enabled', { capability: item.label })
     }))
+}
+
+function formatCompactNumber(value: number): string {
+  const absValue = Math.abs(value)
+  const rounded = absValue >= 10 ? Math.round(value) : Math.round(value * 10) / 10
+  return String(rounded).replace(/\.0$/, '')
 }
