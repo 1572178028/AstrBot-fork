@@ -394,6 +394,10 @@ class KBHelper:
             except KnowledgeBaseUploadError:
                 raise
             except Exception as exc:
+                logger.error(
+                    f"向量存储失败(file={file_name}): {type(exc).__name__}: {exc}",
+                    exc_info=True,
+                )
                 raise KnowledgeBaseUploadError(
                     stage="storage",
                     user_message=("存储失败：文本块已生成，但写入知识库索引时出错。"),
